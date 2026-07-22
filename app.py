@@ -306,7 +306,7 @@ def delete_video(video_id):
     conn.close()
 
 def get_random_videos(count, min_rating=MIN_RATING_TO_SHOW):
-    """Получает случайные видео без исключения пользователя"""
+    """Получает случайные видео (включая свои)"""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
