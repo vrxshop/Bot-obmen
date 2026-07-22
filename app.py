@@ -31,7 +31,7 @@ ADMIN_ID = 8559381302
 VIP_PRICE = 299
 TRIAL_PRICE = 39
 DAILY_LIMIT = 30
-MIN_RATING_TO_SHOW = 0  # ← ВРЕМЕННО ДЛЯ ТЕСТА
+MIN_RATING_TO_SHOW = 0
 AUTO_DELETE_RATING = -10
 MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2 ГБ
 
@@ -248,12 +248,12 @@ def get_daily_exchanges(user_id):
     conn.close()
     return result[0] if result else 0
 
-def increment_daily_exchanges(user_id):
+def increment_daily_exchanges(user_id, count=1):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     today = datetime.now().date().isoformat()
-    c.execute('UPDATE users SET daily_exchanges = daily_exchanges + 1, last_exchange_date = ? WHERE user_id = ?', 
-              (today, user_id))
+    c.execute('UPDATE users SET daily_exchanges = daily_exchanges + ?, last_exchange_date = ? WHERE user_id = ?', 
+              (count, today, user_id))
     conn.commit()
     conn.close()
 
@@ -305,21 +305,15 @@ def delete_video(video_id):
     conn.commit()
     conn.close()
 
-def get_random_videos(count, user_id=None, min_rating=MIN_RATING_TO_SHOW):
+def get_random_videos(count, min_rating=MIN_RATING_TO_SHOW):
+    """Получает случайные видео без исключения пользователя"""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    if user_id:
-        c.execute('''
-            SELECT id, file_id, rating, likes, dislikes 
-            FROM videos WHERE is_active = 1 AND rating >= ? AND uploaded_by != ?
-            ORDER BY RANDOM() LIMIT ?
-        ''', (min_rating, user_id, count))
-    else:
-        c.execute('''
-            SELECT id, file_id, rating, likes, dislikes 
-            FROM videos WHERE is_active = 1 AND rating >= ?
-            ORDER BY RANDOM() LIMIT ?
-        ''', (min_rating, count))
+    c.execute('''
+        SELECT id, file_id, rating, likes, dislikes 
+        FROM videos WHERE is_active = 1 AND rating >= ?
+        ORDER BY RANDOM() LIMIT ?
+    ''', (min_rating, count))
     result = c.fetchall()
     conn.close()
     return result
@@ -499,7 +493,6 @@ def get_admin_keyboard():
         [InlineKeyboardButton(text="📋 Категоризация (1 видео)", callback_data="admin_check_one")],
         [InlineKeyboardButton(text="📉 Видео с рейтингом < 5", callback_data="admin_check_low_rating")],
         [InlineKeyboardButton(text="📩 Жалобы (5+)", callback_data="admin_check_complaints")],
-        [InlineKeyboardButton(text="🔍 Проверить дубликаты (100 видео)", callback_data="admin_check_duplicates")],
         [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")],
         [InlineKeyboardButton(text="👑 Список VIP", callback_data="admin_vip_list")],
         [InlineKeyboardButton(text="🗑 Автоочистка", callback_data="admin_cleanup")]
@@ -589,8 +582,6 @@ async def export_db(message: Message):
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ Только для админа!")
         return
-    
-    print("📩 КОМАНДА /export_db ПОЛУЧЕНА!")  # ← БУДЕТ В ЛОГАХ
     
     if not os.path.exists(DB_PATH):
         await message.answer("❌ Файл базы данных не найден!")
@@ -753,8 +744,8 @@ async def get_videos(callback: CallbackQuery):
         await callback.answer("❌ Сначала отправь видео!", show_alert=True)
         return
     
-    count = min(user_video_count, 10)
-    videos = get_random_videos(count, user_id=user_id)
+    # Получаем до 10 видео (без исключения пользователя)
+    videos = get_random_videos(10, min_rating=MIN_RATING_TO_SHOW)
     
     if not videos:
         await callback.answer("❌ В базе нет подходящих видео!", show_alert=True)
@@ -773,7 +764,9 @@ async def get_videos(callback: CallbackQuery):
         except Exception as e:
             logging.error(f"Ошибка отправки: {e}")
     
-    increment_daily_exchanges(user_id)
+    # Увеличиваем счетчик на количество отправленных видео
+    increment_daily_exchanges(user_id, sent)
+    
     remaining = DAILY_LIMIT - get_daily_exchanges(user_id) if not is_vip(user_id) else "∞"
     
     await callback.message.answer(f"✅ Отправлено {sent} видео!\n📊 Осталось обменов: {remaining}")
@@ -955,7 +948,7 @@ async def vip_random_category(callback: CallbackQuery):
         return
     
     count = min(user_video_count, 10)
-    videos = get_random_videos(count, user_id=user_id)
+    videos = get_random_videos(count)
     
     if not videos:
         await callback.answer(f"❌ В категории {CATEGORIES[category]['name']} нет видео!", show_alert=True)
@@ -985,7 +978,7 @@ async def vip_top(callback: CallbackQuery):
         await callback.answer("❌ Только для VIP!", show_alert=True)
         return
     
-    videos = get_random_videos(10, user_id=user_id)
+    videos = get_random_videos(10)
     if not videos:
         await callback.answer("❌ Нет видео с рейтингом!", show_alert=True)
         return
