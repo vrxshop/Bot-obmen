@@ -24,7 +24,8 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # ==================================================
 # КОНФИГУРАЦИЯ
 # ==================================================
-BOT_TOKEN = "8696076422:AAHumHjSmQd24T4P94Nmad1iLJdrLwfLbIk"
+# Вместо жёсткого токена:
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8696076422:AAHumHjSmQd24T4P94Nmad1iLJdrLwfLbIk")
 ADMIN_ID = 8559381302
 
 # Цены
