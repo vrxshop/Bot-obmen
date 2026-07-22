@@ -1218,6 +1218,21 @@ async def export_db(message: Message):
         await message.answer("✅ База данных отправлена!")
     except Exception as e:
         await message.answer(f"❌ Ошибка: {e}")
+
+@dp.message(Command("clear"))
+async def clear_videos(message: Message):
+    """Очищает таблицу videos (только для админа)"""
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ Только для админа!")
+        return
+    
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM videos")
+    conn.commit()
+    conn.close()
+    
+    await message.answer("✅ Все видео удалены из базы!")
 # ==================================================
 # 4. ВСЁ ОСТАЛЬНОЕ (В САМОМ КОНЦЕ!)
 # ==================================================
@@ -1255,13 +1270,6 @@ async def check_vip_expiring():
         except Exception as e:
             logging.error(f"Ошибка проверки VIP: {e}")
         await asyncio.sleep(3600)
-
-# Временно добавь в код или выполни через Shell на Render
-conn = sqlite3.connect("bot.db")
-c = conn.cursor()
-c.execute("DELETE FROM videos")  # удаляем все старые видео
-conn.commit()
-conn.close()
 
 # ==================================================
 # ЗАПУСК
