@@ -58,6 +58,12 @@ CATEGORIES = {
 # ==================================================
 flask_app = Flask(__name__)
 
+@dp.message()
+async def catch_all(message: Message):
+    """Ловит ВСЕ сообщения для отладки"""
+    await message.answer(f"📩 Получено сообщение: {message.text if message.text else 'медиа'}")
+    print(f"📩 Получено: {message}")
+
 @flask_app.route('/')
 def home():
     return "🤖 Бот работает!"
