@@ -55,7 +55,7 @@ CATEGORIES = {
 }
 
 # ==================================================
-# FLASK
+# FLASK ДЛЯ RENDER И WEBHOOK
 # ==================================================
 flask_app = Flask(__name__)
 
@@ -166,7 +166,7 @@ def init_db():
     print("✅ База данных готова!")
 
 # ==================================================
-# ФУНКЦИИ РАБОТЫ С БАЗОЙ (СОКРАЩЕННЫЙ НАБОР)
+# ФУНКЦИИ РАБОТЫ С БАЗОЙ
 # ==================================================
 
 def get_user(user_id):
@@ -234,14 +234,6 @@ def activate_trial(user_id):
     conn.close()
     return True
 
-def get_vip_users():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('SELECT user_id, first_name, vip_until, vip_duration FROM users WHERE vip_status = 1')
-    result = c.fetchall()
-    conn.close()
-    return result
-
 def get_vip_count():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -249,6 +241,14 @@ def get_vip_count():
     result = c.fetchone()
     conn.close()
     return result[0] if result else 0
+
+def get_vip_users():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute('SELECT user_id, first_name, vip_until, vip_duration FROM users WHERE vip_status = 1')
+    result = c.fetchall()
+    conn.close()
+    return result
 
 def get_daily_exchanges(user_id):
     conn = sqlite3.connect(DB_PATH)
@@ -313,8 +313,6 @@ def delete_video(video_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('UPDATE videos SET is_active = 0 WHERE id = ?', (video_id,))
-    c.execute('DELETE FROM video_votes WHERE video_id = ?', (video_id,))
-    c.execute('DELETE FROM complaints WHERE video_id = ?', (video_id,))
     conn.commit()
     conn.close()
 
@@ -525,8 +523,10 @@ def get_admin_keyboard():
 
 def get_video_rating_keyboard(video_id: int, likes: int, dislikes: int):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(f"👍 {likes}", callback_data=f"like_{video_id}"),
-         InlineKeyboardButton(f"👎 {dislikes}", callback_data=f"dislike_{video_id}")],
+        [
+            InlineKeyboardButton(f"👍 {likes}", callback_data=f"like_{video_id}"),
+            InlineKeyboardButton(f"👎 {dislikes}", callback_data=f"dislike_{video_id}")
+        ],
         [InlineKeyboardButton("📩 Жалоба", callback_data=f"complaint_{video_id}")]
     ])
 
@@ -546,8 +546,10 @@ def get_admin_video_keyboard(video_id: int):
 
 def get_admin_low_rating_keyboard(video_id: int):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton("❤️ Восстановить (рейтинг → 0)", callback_data=f"restore_{video_id}"),
-         InlineKeyboardButton("🗑 Удалить", callback_data=f"admin_delete_{video_id}")]
+        [
+            InlineKeyboardButton("❤️ Восстановить (рейтинг → 0)", callback_data=f"restore_{video_id}"),
+            InlineKeyboardButton("🗑 Удалить", callback_data=f"admin_delete_{video_id}")
+        ]
     ])
 
 # ==================================================
@@ -1177,8 +1179,6 @@ async def admin_check_one(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("❌ Только для админа!", show_alert=True)
         return
-    
-    # Просто заглушка, чтобы не было ошибки
     await callback.answer("⏳ В разработке...", show_alert=True)
 
 @dp.callback_query(F.data == "admin_check_low_rating")
@@ -1186,7 +1186,6 @@ async def admin_check_low_rating(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("❌ Только для админа!", show_alert=True)
         return
-    
     await callback.answer("⏳ В разработке...", show_alert=True)
 
 @dp.callback_query(F.data == "admin_check_complaints")
@@ -1194,7 +1193,6 @@ async def admin_check_complaints(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("❌ Только для админа!", show_alert=True)
         return
-    
     await callback.answer("⏳ В разработке...", show_alert=True)
 
 # ==================================================
