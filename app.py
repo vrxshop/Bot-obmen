@@ -624,16 +624,9 @@ async def handle_video(message: Message):
         await message.answer("❌ <b>Файл слишком маленький!</b> (минимум 50 КБ)")
         return
     
-    # Скачиваем для хэша
-    temp_path = f"temp_{user_id}_{message.message_id}.mp4"
-    await bot.download_file(video.file_id, temp_path)
-    
-    hash_md5 = hashlib.md5()
-    with open(temp_path, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    file_hash = hash_md5.hexdigest()
-    os.remove(temp_path)
+    # ⭐ НЕТ СКАЧИВАНИЯ! Используем file_unique_id
+    file_hash = video.file_unique_id
+    print(f"🎬 Видео получено: {video.file_id}")
     
     # Проверка дубликата
     existing_file_id = get_video_by_hash(file_hash)
