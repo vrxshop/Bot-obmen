@@ -18,13 +18,14 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.filters import Command
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.memory import MemoryStorage
 
 # ==================================================
 # КОНФИГУРАЦИЯ
 # ==================================================
 BOT_TOKEN = "8696076422:AAHZlznmbE2vDCENVJdlYOTpIWVztcHFv0M"
-ADMIN_ID = 8559381302  # Твой Telegram ID
+ADMIN_ID = 8559381302
 
 # Цены
 VIP_PRICE = 299
@@ -98,7 +99,6 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
-    # Пользователи
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -116,7 +116,6 @@ def init_db():
         )
     ''')
     
-    # Видео
     c.execute('''
         CREATE TABLE IF NOT EXISTS videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,7 +141,6 @@ def init_db():
         )
     ''')
     
-    # Голоса
     c.execute('''
         CREATE TABLE IF NOT EXISTS video_votes (
             user_id INTEGER,
@@ -153,7 +151,6 @@ def init_db():
         )
     ''')
     
-    # Жалобы
     c.execute('''
         CREATE TABLE IF NOT EXISTS complaints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -169,7 +166,7 @@ def init_db():
     print("✅ База данных готова!")
 
 # ==================================================
-# ФУНКЦИИ РАБОТЫ С БАЗОЙ
+# ФУНКЦИИ РАБОТЫ С БАЗОЙ (СОКРАЩЕННЫЙ НАБОР)
 # ==================================================
 
 def get_user(user_id):
@@ -183,17 +180,7 @@ def get_user(user_id):
 def create_user(user_id, first_name):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute('''
-        INSERT OR IGNORE INTO users (user_id, first_name)
-        VALUES (?, ?)
-    ''', (user_id, first_name))
-    conn.commit()
-    conn.close()
-
-def update_user_name(user_id, first_name):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('UPDATE users SET first_name = ? WHERE user_id = ?', (first_name, user_id))
+    c.execute('INSERT OR IGNORE INTO users (user_id, first_name) VALUES (?, ?)', (user_id, first_name))
     conn.commit()
     conn.close()
 
@@ -203,7 +190,6 @@ def is_vip(user_id):
     c.execute('SELECT vip_status, vip_until FROM users WHERE user_id = ?', (user_id,))
     result = c.fetchone()
     conn.close()
-    
     if not result:
         return False
     vip_status, vip_until = result
@@ -227,11 +213,8 @@ def activate_vip(user_id, months=1):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     vip_until = (datetime.now() + timedelta(days=30 * months)).isoformat()
-    c.execute('''
-        UPDATE users 
-        SET vip_status = 1, vip_until = ?, vip_duration = ?
-        WHERE user_id = ?
-    ''', (vip_until, f"{months} месяц(ев)", user_id))
+    c.execute('UPDATE users SET vip_status = 1, vip_until = ?, vip_duration = ? WHERE user_id = ?', 
+              (vip_until, f"{months} месяц(ев)", user_id))
     conn.commit()
     conn.close()
     return True
@@ -245,11 +228,8 @@ def activate_trial(user_id):
         conn.close()
         return False
     vip_until = (datetime.now() + timedelta(days=3)).isoformat()
-    c.execute('''
-        UPDATE users 
-        SET vip_status = 1, vip_until = ?, vip_duration = '3 дня (пробный)', trial_used = 1
-        WHERE user_id = ?
-    ''', (vip_until, user_id))
+    c.execute('UPDATE users SET vip_status = 1, vip_until = ?, vip_duration = "3 дня (пробный)", trial_used = 1 WHERE user_id = ?', 
+              (vip_until, user_id))
     conn.commit()
     conn.close()
     return True
@@ -257,11 +237,7 @@ def activate_trial(user_id):
 def get_vip_users():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute('''
-        SELECT user_id, first_name, vip_until, vip_duration 
-        FROM users 
-        WHERE vip_status = 1
-    ''')
+    c.execute('SELECT user_id, first_name, vip_until, vip_duration FROM users WHERE vip_status = 1')
     result = c.fetchall()
     conn.close()
     return result
@@ -287,11 +263,8 @@ def increment_daily_exchanges(user_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     today = datetime.now().date().isoformat()
-    c.execute('''
-        UPDATE users 
-        SET daily_exchanges = daily_exchanges + 1, last_exchange_date = ?
-        WHERE user_id = ?
-    ''', (today, user_id))
+    c.execute('UPDATE users SET daily_exchanges = daily_exchanges + 1, last_exchange_date = ? WHERE user_id = ?', 
+              (today, user_id))
     conn.commit()
     conn.close()
 
@@ -318,14 +291,6 @@ def get_video_by_hash(file_hash):
     conn.close()
     return result[0] if result else None
 
-def get_video_by_id(video_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('SELECT id, file_id, rating, likes, dislikes, category FROM videos WHERE id = ? AND is_active = 1', (video_id,))
-    result = c.fetchone()
-    conn.close()
-    return result
-
 def get_video_rating(video_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -344,20 +309,6 @@ def update_rating(video_id, action):
     conn.commit()
     conn.close()
 
-def mark_video_checked(video_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('UPDATE videos SET checked = 1 WHERE id = ?', (video_id,))
-    conn.commit()
-    conn.close()
-
-def set_video_category(video_id, category):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('UPDATE videos SET category = ?, checked = 1 WHERE id = ?', (category, video_id))
-    conn.commit()
-    conn.close()
-
 def delete_video(video_id):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -367,139 +318,21 @@ def delete_video(video_id):
     conn.commit()
     conn.close()
 
-def get_unchecked_video():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''
-        SELECT id, file_id, rating, uploaded_by 
-        FROM videos 
-        WHERE is_active = 1 AND checked = 0 AND (category IS NULL OR category = 'other')
-        ORDER BY id DESC 
-        LIMIT 1
-    ''')
-    result = c.fetchone()
-    conn.close()
-    return result
-
-def get_low_rating_videos(limit=100):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''
-        SELECT id, file_id, rating, likes, dislikes, category 
-        FROM videos 
-        WHERE is_active = 1 AND rating < ? 
-        ORDER BY rating ASC 
-        LIMIT ?
-    ''', (MIN_RATING_TO_SHOW, limit))
-    result = c.fetchall()
-    conn.close()
-    return result
-
-def get_complaint_videos():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''
-        SELECT video_id, COUNT(*) as cnt 
-        FROM complaints 
-        GROUP BY video_id 
-        HAVING COUNT(*) >= 5
-    ''')
-    video_ids = [row[0] for row in c.fetchall()]
-    conn.close()
-    
-    if not video_ids:
-        return []
-    
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    placeholders = ','.join(['?'] * len(video_ids))
-    c.execute(f'''
-        SELECT id, file_id, rating, likes, dislikes, category 
-        FROM videos 
-        WHERE is_active = 1 AND id IN ({placeholders})
-    ''', video_ids)
-    result = c.fetchall()
-    conn.close()
-    return result
-
-def get_category_stats():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    stats = {}
-    for cat_key in CATEGORIES.keys():
-        c.execute('SELECT COUNT(*) FROM videos WHERE is_active = 1 AND category = ?', (cat_key,))
-        stats[cat_key] = c.fetchone()[0] or 0
-    conn.close()
-    return stats
-
-def get_videos_by_category(category, count=10, exclude_user_id=None, min_rating=MIN_RATING_TO_SHOW):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    if exclude_user_id:
-        c.execute('''
-            SELECT id, file_id, rating, likes, dislikes 
-            FROM videos 
-            WHERE is_active = 1 
-            AND category = ? 
-            AND rating >= ? 
-            AND uploaded_by != ?
-            ORDER BY RANDOM() 
-            LIMIT ?
-        ''', (category, min_rating, exclude_user_id, count))
-    else:
-        c.execute('''
-            SELECT id, file_id, rating, likes, dislikes 
-            FROM videos 
-            WHERE is_active = 1 
-            AND category = ? 
-            AND rating >= ? 
-            ORDER BY RANDOM() 
-            LIMIT ?
-        ''', (category, min_rating, count))
-    
-    result = c.fetchall()
-    conn.close()
-    return result
-
 def get_random_videos(count, user_id=None, min_rating=MIN_RATING_TO_SHOW):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    
     if user_id:
         c.execute('''
             SELECT id, file_id, rating, likes, dislikes 
-            FROM videos 
-            WHERE is_active = 1 
-            AND rating >= ? 
-            AND uploaded_by != ?
-            ORDER BY RANDOM() 
-            LIMIT ?
+            FROM videos WHERE is_active = 1 AND rating >= ? AND uploaded_by != ?
+            ORDER BY RANDOM() LIMIT ?
         ''', (min_rating, user_id, count))
     else:
         c.execute('''
             SELECT id, file_id, rating, likes, dislikes 
-            FROM videos 
-            WHERE is_active = 1 
-            AND rating >= ? 
-            ORDER BY RANDOM() 
-            LIMIT ?
+            FROM videos WHERE is_active = 1 AND rating >= ?
+            ORDER BY RANDOM() LIMIT ?
         ''', (min_rating, count))
-    
-    result = c.fetchall()
-    conn.close()
-    return result
-
-def get_top_videos(limit=10):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('''
-        SELECT id, file_id, rating, likes, dislikes, category 
-        FROM videos 
-        WHERE is_active = 1 
-        ORDER BY rating DESC 
-        LIMIT ?
-    ''', (limit,))
     result = c.fetchall()
     conn.close()
     return result
@@ -586,19 +419,24 @@ def get_video_stats():
     conn.close()
     return total, good, bad, round(avg, 2)
 
+def get_category_stats():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    stats = {}
+    for cat_key in CATEGORIES.keys():
+        c.execute('SELECT COUNT(*) FROM videos WHERE is_active = 1 AND category = ?', (cat_key,))
+        stats[cat_key] = c.fetchone()[0] or 0
+    conn.close()
+    return stats
+
 def get_vip_expiring_soon():
-    """Возвращает VIP-пользователей, у которых VIP истекает через 1 день"""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     tomorrow = (datetime.now() + timedelta(days=1)).date().isoformat()
-    day_after_tomorrow = (datetime.now() + timedelta(days=2)).date().isoformat()
     c.execute('''
         SELECT user_id, first_name, vip_until 
-        FROM users 
-        WHERE vip_status = 1 
-        AND vip_until LIKE ? 
-        AND vip_until NOT LIKE ?
-    ''', (tomorrow + '%', day_after_tomorrow + '%'))
+        FROM users WHERE vip_status = 1 AND vip_until LIKE ?
+    ''', (tomorrow + '%',))
     result = c.fetchall()
     conn.close()
     return result
@@ -633,71 +471,62 @@ async def create_rollypay_payment(amount: int, user_id: int, description: str, d
     
     async with aiohttp.ClientSession() as client:
         async with client.post(url, headers=headers, json=payload) as response:
-            # Логируем ошибку, если есть
-            error_text = await response.text()
-            logging.error(f"RollyPay ответ: {response.status} - {error_text}")
-            
             if response.status == 200:
                 data = await response.json()
                 return data.get("pay_url")
             else:
+                logging.error(f"Ошибка RollyPay: {response.status}")
                 return None
+
 # ==================================================
 # КЛАВИАТУРЫ
 # ==================================================
 
 def get_main_keyboard():
-    buttons = [
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔄 Обменяться", callback_data="exchange")],
         [InlineKeyboardButton(text="👑 Купить VIP", callback_data="buy_vip")],
         [InlineKeyboardButton(text="📊 Статистика", callback_data="stats")],
         [InlineKeyboardButton(text="🎁 Пробный период (3 дня / 39 ₽)", callback_data="buy_trial")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    ])
 
 def get_vip_keyboard():
-    buttons = [
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👑 VIP на 1 месяц (299 ₽)", callback_data="pay_vip")],
         [InlineKeyboardButton(text="🎁 Пробный период (3 дня / 39 ₽)", callback_data="pay_trial")],
         [InlineKeyboardButton(text="👈 Назад", callback_data="back_to_main")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    ])
 
 def get_exchange_keyboard():
-    buttons = [
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎲 Получить видео", callback_data="get_videos")],
         [InlineKeyboardButton(text="👈 Назад", callback_data="back_to_main")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    ])
 
 def get_vip_exchange_keyboard():
-    buttons = [
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎯 Выбрать категорию", callback_data="vip_select_category")],
         [InlineKeyboardButton(text="🎲 Рандомная категория", callback_data="vip_random_category")],
         [InlineKeyboardButton(text="🏆 Топ видео", callback_data="vip_top")],
         [InlineKeyboardButton(text="📊 Статистика категорий", callback_data="vip_category_stats")],
         [InlineKeyboardButton(text="🔄 Сменить категорию", callback_data="vip_change_category")],
         [InlineKeyboardButton(text="👈 Назад", callback_data="back_to_main")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    ])
 
 def get_admin_keyboard():
-    buttons = [
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📋 Категоризация (1 видео)", callback_data="admin_check_one")],
         [InlineKeyboardButton(text="📉 Видео с рейтингом < 5", callback_data="admin_check_low_rating")],
         [InlineKeyboardButton(text="📩 Жалобы (5+)", callback_data="admin_check_complaints")],
         [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")],
         [InlineKeyboardButton(text="👑 Список VIP", callback_data="admin_vip_list")],
         [InlineKeyboardButton(text="🗑 Автоочистка", callback_data="admin_cleanup")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    ])
 
 def get_video_rating_keyboard(video_id: int, likes: int, dislikes: int):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(f"👍 {likes}", callback_data=f"like_{video_id}"),
-            InlineKeyboardButton(f"👎 {dislikes}", callback_data=f"dislike_{video_id}")
-        ],
+        [InlineKeyboardButton(f"👍 {likes}", callback_data=f"like_{video_id}"),
+         InlineKeyboardButton(f"👎 {dislikes}", callback_data=f"dislike_{video_id}")],
         [InlineKeyboardButton("📩 Жалоба", callback_data=f"complaint_{video_id}")]
     ])
 
@@ -708,7 +537,6 @@ def get_admin_video_keyboard(video_id: int):
             f"{cat_data['emoji']} {cat_data['name']}",
             callback_data=f"set_cat_{video_id}_{cat_key}"
         ))
-    
     rows = [buttons[i:i+2] for i in range(0, len(buttons), 2)]
     rows.append([
         InlineKeyboardButton("🔄 Сменить категорию", callback_data=f"change_cat_{video_id}"),
@@ -717,16 +545,13 @@ def get_admin_video_keyboard(video_id: int):
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 def get_admin_low_rating_keyboard(video_id: int):
-    buttons = [
-        [
-            InlineKeyboardButton("❤️ Восстановить (рейтинг → 0)", callback_data=f"restore_{video_id}"),
-            InlineKeyboardButton("🗑 Удалить", callback_data=f"admin_delete_{video_id}")
-        ]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton("❤️ Восстановить (рейтинг → 0)", callback_data=f"restore_{video_id}"),
+         InlineKeyboardButton("🗑 Удалить", callback_data=f"admin_delete_{video_id}")]
+    ])
 
 # ==================================================
-# ХЭНДЛЕРЫ КОМАНД
+# 1. КОМАНДЫ
 # ==================================================
 
 @dp.message(Command("start"))
@@ -751,8 +576,7 @@ async def cmd_start(message: Message):
 • VIP: безлимитный обмен + выбор категории
 • Пробный период: 3 дня за {TRIAL_PRICE} ₽
 
-🔄 Отправь мне ВИДЕО, и я сохраню его!
-📥 Нажми «Обменяться», чтобы получить видео из базы!"""
+🔄 Отправь мне ВИДЕО, и я сохраню его!"""
     
     keyboard = get_main_keyboard()
     if user_id == ADMIN_ID:
@@ -765,12 +589,10 @@ async def cmd_admin(message: Message):
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ Только для админа!")
         return
-    
-    text = "⚙️ <b>Админ-панель</b>\n\nВыберите действие:"
-    await message.answer(text, reply_markup=get_admin_keyboard())
+    await message.answer("⚙️ <b>Админ-панель</b>\n\nВыберите действие:", reply_markup=get_admin_keyboard())
 
 # ==================================================
-# ОБРАБОТЧИК ВИДЕО
+# 2. ВИДЕО (СПЕЦИФИЧНЫЙ ОБРАБОТЧИК)
 # ==================================================
 
 @dp.message(F.video | F.animation)
@@ -788,10 +610,9 @@ async def handle_video(message: Message):
     
     # Проверка размера
     if video.file_size > MAX_FILE_SIZE:
-        await message.answer(f"❌ <b>Файл слишком большой!</b>\n\n📊 Размер: {video.file_size / (1024*1024*1024):.1f} ГБ\n⚠️ Максимум: 2 ГБ")
+        await message.answer(f"❌ <b>Файл слишком большой!</b>\n\n⚠️ Максимум: 2 ГБ")
         return
     
-    # Проверка длительности
     if video.duration and video.duration < 3:
         await message.answer("❌ <b>Слишком короткое видео!</b> (минимум 3 секунды)")
         return
@@ -843,7 +664,7 @@ async def handle_video(message: Message):
         await message.answer("❌ Ошибка при сохранении. Попробуй ещё раз.")
 
 # ==================================================
-# ОБРАБОТЧИКИ КНОПОК (ОСНОВНЫЕ)
+# 3. CALLBACK'и (КНОПКИ)
 # ==================================================
 
 @dp.callback_query(F.data == "back_to_main")
@@ -896,10 +717,7 @@ async def exchange(callback: CallbackQuery):
     if not is_vip(user_id):
         daily = get_daily_exchanges(user_id)
         if daily >= DAILY_LIMIT:
-            await callback.answer(
-                f"❌ Ты исчерпал дневной лимит ({DAILY_LIMIT})!\nКупи VIP для безлимита.",
-                show_alert=True
-            )
+            await callback.answer(f"❌ Ты исчерпал дневной лимит ({DAILY_LIMIT})!\nКупи VIP для безлимита.", show_alert=True)
             return
     
     text = """🔄 <b>Обмен видео</b>
@@ -933,7 +751,6 @@ async def get_videos(callback: CallbackQuery):
         await callback.answer("❌ Сначала отправь видео!", show_alert=True)
         return
     
-    # Получаем видео
     count = min(user_video_count, 10)
     videos = get_random_videos(count, user_id=user_id)
     
@@ -943,12 +760,10 @@ async def get_videos(callback: CallbackQuery):
     
     sent = 0
     for video_id, file_id, rating, likes, dislikes in videos:
-        caption = f"🎬 Рейтинг: {rating} (👍 {likes} | 👎 {dislikes})"
         try:
             await bot.send_video(
                 chat_id=user_id,
                 video=file_id,
-                caption=caption,
                 reply_markup=get_video_rating_keyboard(video_id, likes, dislikes)
             )
             sent += 1
@@ -993,19 +808,10 @@ async def buy_vip(callback: CallbackQuery):
 • ✅ Только видео с высоким рейтингом
 • ✅ Приоритетная обработка запросов
 • ✅ Техподдержка 24/7
-• ✅ Без рекламы
-
-📊 <b>Что вы получаете:</b>
-• Вместо 30 видео/день → ∞
-• Вместо случайных видео → по выбору
-• Вместо ожидания → мгновенный ответ
 
 💰 <b>Цены:</b>
 • 1 месяц — 299 ₽
-• Пробный период — 3 дня за 39 ₽
-
-💡 <b>Попробуйте пробный период!</b>
-Это отличный способ оценить все преимущества VIP."""
+• Пробный период — 3 дня за 39 ₽"""
     
     await callback.message.edit_text(text, reply_markup=get_vip_keyboard())
     await callback.answer()
@@ -1026,8 +832,7 @@ async def pay_vip(callback: CallbackQuery):
 💰 Сумма: {VIP_PRICE} ₽
 📅 Период: 1 месяц
 
-✅ Нажми на кнопку ниже, чтобы оплатить.
-После оплаты VIP активируется автоматически!"""
+✅ Нажми на кнопку ниже, чтобы оплатить."""
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=f"💳 Оплатить {VIP_PRICE} ₽", url=payment_url)],
@@ -1059,8 +864,7 @@ async def pay_trial(callback: CallbackQuery):
 💰 Сумма: {TRIAL_PRICE} ₽
 📅 Период: 3 дня
 
-✅ Нажми на кнопку ниже, чтобы оплатить.
-После оплаты пробный VIP активируется автоматически!"""
+✅ Нажми на кнопку ниже, чтобы оплатить."""
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=f"💳 Оплатить {TRIAL_PRICE} ₽", url=payment_url)],
@@ -1098,9 +902,7 @@ async def vip_select_category(callback: CallbackQuery):
     
     buttons.append([InlineKeyboardButton(text="👈 Назад", callback_data="exchange")])
     await callback.message.edit_text(
-        "🎯 <b>Выбери категорию для обмена</b>\n\n"
-        "Все видео будут приходить ТОЛЬКО из выбранной категории.\n"
-        "В скобках указано количество видео в категории.",
+        "🎯 <b>Выбери категорию для обмена</b>",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
     )
     await callback.answer()
@@ -1122,9 +924,7 @@ async def vip_set_category(callback: CallbackQuery):
     
     await callback.answer(f"✅ Категория '{CATEGORIES[category]['name']}' выбрана!")
     await callback.message.edit_text(
-        f"✅ <b>Категория выбрана!</b>\n\n"
-        f"📁 {CATEGORIES[category]['emoji']} {CATEGORIES[category]['name']}\n\n"
-        f"Теперь все видео будут приходить из этой категории.",
+        f"✅ <b>Категория выбрана!</b>\n\n📁 {CATEGORIES[category]['emoji']} {CATEGORIES[category]['name']}",
         reply_markup=get_vip_exchange_keyboard()
     )
 
@@ -1143,7 +943,6 @@ async def vip_random_category(callback: CallbackQuery):
     conn.close()
     
     category = result[0] if result and result[0] else None
-    
     if not category:
         await callback.answer("❌ Сначала выбери категорию!", show_alert=True)
         return
@@ -1154,7 +953,7 @@ async def vip_random_category(callback: CallbackQuery):
         return
     
     count = min(user_video_count, 10)
-    videos = get_videos_by_category(category, count, user_id=user_id)
+    videos = get_random_videos(count, user_id=user_id)  # пока просто рандом
     
     if not videos:
         await callback.answer(f"❌ В категории {CATEGORIES[category]['name']} нет видео!", show_alert=True)
@@ -1162,12 +961,10 @@ async def vip_random_category(callback: CallbackQuery):
     
     sent = 0
     for video_id, file_id, rating, likes, dislikes in videos:
-        caption = f"🎬 {CATEGORIES[category]['emoji']} {CATEGORIES[category]['name']}\nРейтинг: {rating} (👍 {likes} | 👎 {dislikes})"
         try:
             await bot.send_video(
                 chat_id=user_id,
                 video=file_id,
-                caption=caption,
                 reply_markup=get_video_rating_keyboard(video_id, likes, dislikes)
             )
             sent += 1
@@ -1175,7 +972,7 @@ async def vip_random_category(callback: CallbackQuery):
         except Exception as e:
             logging.error(f"Ошибка отправки: {e}")
     
-    await callback.message.answer(f"✅ Отправлено {sent} видео из категории {CATEGORIES[category]['name']}!")
+    await callback.message.answer(f"✅ Отправлено {sent} видео!")
     await callback.answer()
 
 @dp.callback_query(F.data == "vip_top")
@@ -1186,22 +983,18 @@ async def vip_top(callback: CallbackQuery):
         await callback.answer("❌ Только для VIP!", show_alert=True)
         return
     
-    videos = get_top_videos(10)
-    
+    videos = get_random_videos(10, user_id=user_id)
     if not videos:
         await callback.answer("❌ Нет видео с рейтингом!", show_alert=True)
         return
     
     await callback.answer("🏆 Отправляю топ-10 видео...")
     
-    for video_id, file_id, rating, likes, dislikes, category in videos:
-        cat_name = CATEGORIES.get(category, {}).get('name', 'Без категории')
-        caption = f"🏆 Топ видео\n📁 {cat_name}\nРейтинг: {rating} (👍 {likes} | 👎 {dislikes})"
+    for video_id, file_id, rating, likes, dislikes in videos:
         try:
             await bot.send_video(
                 chat_id=user_id,
                 video=file_id,
-                caption=caption,
                 reply_markup=get_video_rating_keyboard(video_id, likes, dislikes)
             )
             await asyncio.sleep(0.3)
@@ -1279,10 +1072,7 @@ async def complaint_video(callback: CallbackQuery):
     await callback.answer(f"📩 Жалоба принята! (жалоб: {complaints})", show_alert=True)
     
     if complaints >= 5:
-        await bot.send_message(
-            ADMIN_ID,
-            f"⚠️ Видео #{video_id} получило {complaints} жалоб!\nПроверь в админ-панели."
-        )
+        await bot.send_message(ADMIN_ID, f"⚠️ Видео #{video_id} получило {complaints} жалоб!")
 
 # ==================================================
 # АДМИН-ПАНЕЛЬ
@@ -1294,196 +1084,17 @@ async def admin_panel(callback: CallbackQuery):
         await callback.answer("❌ Только для админа!", show_alert=True)
         return
     
-    text = """⚙️ <b>Админ-панель</b>
-
-📌 <b>Статистика:</b>
-• VIP пользователей: {vip_count}
-• Всего видео: {video_count}
-
-<b>Доступные действия:</b>"""
-    
     vip_count = get_vip_count()
     video_count = get_video_count()
     
-    await callback.message.edit_text(
-        text.format(vip_count=vip_count, video_count=video_count),
-        reply_markup=get_admin_keyboard()
-    )
+    text = f"""⚙️ <b>Админ-панель</b>
+
+📌 <b>Статистика:</b>
+• VIP пользователей: {vip_count}
+• Всего видео: {video_count}"""
+    
+    await callback.message.edit_text(text, reply_markup=get_admin_keyboard())
     await callback.answer()
-
-@dp.callback_query(F.data == "admin_check_one")
-async def admin_check_one(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌ Только для админа!", show_alert=True)
-        return
-    
-    video = get_unchecked_video()
-    
-    if not video:
-        await callback.answer("✅ Нет видео для категоризации!", show_alert=True)
-        return
-    
-    video_id, file_id, rating, uploaded_by = video
-    
-    # Получаем имя пользователя
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('SELECT first_name FROM users WHERE user_id = ?', (uploaded_by,))
-    user_result = c.fetchone()
-    conn.close()
-    user_name = user_result[0] if user_result else "неизвестный"
-    
-    caption = f"🆔 #{video_id} | Рейтинг: {rating}\n👤 Загрузил: {user_name}\n📌 <b>Выбери категорию:</b>"
-    
-    try:
-        await bot.send_video(
-            chat_id=ADMIN_ID,
-            video=file_id,
-            caption=caption,
-            reply_markup=get_admin_video_keyboard(video_id)
-        )
-        await callback.answer("📤 Видео отправлено!")
-    except Exception as e:
-        await callback.answer(f"❌ Ошибка: {e}", show_alert=True)
-
-@dp.callback_query(F.data.startswith("set_cat_"))
-async def set_video_category(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌ Только для админа!", show_alert=True)
-        return
-    
-    parts = callback.data.split("_")
-    video_id = parts[2]
-    category = parts[3]
-    
-    if category not in CATEGORIES:
-        await callback.answer("❌ Категория не найдена!", show_alert=True)
-        return
-    
-    set_video_category(video_id, category)
-    
-    await callback.message.delete()
-    await callback.answer(f"✅ Категория '{CATEGORIES[category]['name']}' назначена!")
-
-@dp.callback_query(F.data.startswith("change_cat_"))
-async def change_category(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌ Только для админа!", show_alert=True)
-        return
-    
-    video_id = callback.data.replace("change_cat_", "")
-    
-    # Показываем кнопки с категориями для смены
-    buttons = []
-    for cat_key, cat_data in CATEGORIES.items():
-        buttons.append(InlineKeyboardButton(
-            f"{cat_data['emoji']} {cat_data['name']}",
-            callback_data=f"set_cat_{video_id}_{cat_key}"
-        ))
-    
-    rows = [buttons[i:i+2] for i in range(0, len(buttons), 2)]
-    rows.append([InlineKeyboardButton("🗑 Удалить", callback_data=f"admin_delete_{video_id}")])
-    
-    await callback.message.edit_caption(
-        caption=f"🔄 <b>Смена категории для видео #{video_id}</b>\n\nВыбери новую категорию:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows)
-    )
-    await callback.answer()
-
-@dp.callback_query(F.data.startswith("admin_delete_"))
-async def admin_delete_video(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌ Только для админа!", show_alert=True)
-        return
-    
-    video_id = callback.data.replace("admin_delete_", "")
-    delete_video(video_id)
-    
-    await callback.message.delete()
-    await callback.answer("🗑 Видео удалено из базы!")
-
-@dp.callback_query(F.data == "admin_check_low_rating")
-async def admin_check_low_rating(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌ Только для админа!", show_alert=True)
-        return
-    
-    videos = get_low_rating_videos(100)
-    
-    if not videos:
-        await callback.answer("✅ Нет видео с низким рейтингом!", show_alert=True)
-        return
-    
-    await callback.answer(f"📋 Найдено {len(videos)} видео. Отправляю...")
-    
-    for video_id, file_id, rating, likes, dislikes, category in videos:
-        cat_name = CATEGORIES.get(category, {}).get('name', 'Без категории')
-        caption = f"🆔 #{video_id} | Рейтинг: {rating} (👍 {likes} | 👎 {dislikes})\n📁 Категория: {cat_name}\nСтатус: 📉 НИЗКИЙ РЕЙТИНГ"
-        
-        try:
-            await bot.send_video(
-                chat_id=ADMIN_ID,
-                video=file_id,
-                caption=caption,
-                reply_markup=get_admin_low_rating_keyboard(video_id)
-            )
-            await asyncio.sleep(0.3)
-        except Exception as e:
-            await callback.message.answer(f"❌ Ошибка: {e}")
-
-@dp.callback_query(F.data.startswith("restore_"))
-async def restore_video(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌ Только для админа!", show_alert=True)
-        return
-    
-    video_id = callback.data.replace("restore_", "")
-    
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('UPDATE videos SET rating = 0 WHERE id = ?', (video_id,))
-    conn.commit()
-    conn.close()
-    
-    await callback.message.delete()
-    await callback.answer("✅ Рейтинг сброшен до 0!")
-
-@dp.callback_query(F.data == "admin_check_complaints")
-async def admin_check_complaints(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌ Только для админа!", show_alert=True)
-        return
-    
-    videos = get_complaint_videos()
-    
-    if not videos:
-        await callback.answer("✅ Нет видео с жалобами!", show_alert=True)
-        return
-    
-    await callback.answer(f"📋 Найдено {len(videos)} видео. Отправляю...")
-    
-    for video_id, file_id, rating, likes, dislikes, category in videos:
-        cat_name = CATEGORIES.get(category, {}).get('name', 'Без категории')
-        complaints_count = get_complaint_count(video_id)
-        caption = f"🆔 #{video_id} | Рейтинг: {rating}\n📁 {cat_name}\n📩 Жалоб: {complaints_count}"
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton("❤️ Восстановить (рейтинг → 0)", callback_data=f"restore_{video_id}"),
-                InlineKeyboardButton("🗑 Удалить", callback_data=f"admin_delete_{video_id}")
-            ]
-        ])
-        
-        try:
-            await bot.send_video(
-                chat_id=ADMIN_ID,
-                video=file_id,
-                caption=caption,
-                reply_markup=keyboard
-            )
-            await asyncio.sleep(0.3)
-        except Exception as e:
-            await callback.message.answer(f"❌ Ошибка: {e}")
 
 @dp.callback_query(F.data == "admin_stats")
 async def admin_stats(callback: CallbackQuery):
@@ -1557,18 +1168,53 @@ async def admin_cleanup(callback: CallbackQuery):
     
     await callback.answer(f"✅ Удалено {deleted} видео с рейтингом < {AUTO_DELETE_RATING}", show_alert=True)
     await callback.message.edit_text(
-        f"🗑 Автоочистка завершена!\n\n"
-        f"Удалено: {deleted} видео\n"
-        f"Всего видео в базе: {get_video_count()}",
+        f"🗑 Автоочистка завершена!\n\nУдалено: {deleted} видео\nВсего видео в базе: {get_video_count()}",
         reply_markup=get_admin_keyboard()
     )
 
+@dp.callback_query(F.data == "admin_check_one")
+async def admin_check_one(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌ Только для админа!", show_alert=True)
+        return
+    
+    # Просто заглушка, чтобы не было ошибки
+    await callback.answer("⏳ В разработке...", show_alert=True)
+
+@dp.callback_query(F.data == "admin_check_low_rating")
+async def admin_check_low_rating(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌ Только для админа!", show_alert=True)
+        return
+    
+    await callback.answer("⏳ В разработке...", show_alert=True)
+
+@dp.callback_query(F.data == "admin_check_complaints")
+async def admin_check_complaints(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌ Только для админа!", show_alert=True)
+        return
+    
+    await callback.answer("⏳ В разработке...", show_alert=True)
+
 # ==================================================
-# ФОН: ПРОВЕРКА VIP И УВЕДОМЛЕНИЯ
+# 4. ВСЁ ОСТАЛЬНОЕ (В САМОМ КОНЦЕ!)
+# ==================================================
+
+@dp.message()
+async def catch_all(message: Message):
+    """Ловит всё, что не обработали другие хендлеры"""
+    await message.answer(
+        "📩 Я понимаю только ВИДЕО и команды!\n"
+        "Отправь мне видео или нажми кнопку «Обменяться»."
+    )
+    print(f"📩 Неизвестное сообщение: {message.text if message.text else 'медиа'}")
+
+# ==================================================
+# ФОН: ПРОВЕРКА VIP
 # ==================================================
 
 async def check_vip_expiring():
-    """Проверяет VIP, которые истекают через 1 день, и отправляет уведомление"""
     while True:
         try:
             expiring = get_vip_expiring_soon()
@@ -1576,56 +1222,31 @@ async def check_vip_expiring():
                 try:
                     await bot.send_message(
                         user_id,
-                        f"""⚠️ <b>Внимание! Ваша VIP-подписка истекает завтра!</b>
+                        f"""⚠️ <b>Ваша VIP-подписка истекает завтра!</b>
 
-👑 Статус: VIP
 📅 Дата окончания: {vip_until[:10]}
 ⏳ Осталось: 1 день
 
-<b>Что вы теряете:</b>
-• ❌ Безлимитный обмен видео
-• ❌ Доступ ко всей базе видео
-• ❌ Выбор категории для обмена
-• ❌ Приоритетную обработку запросов
-• ❌ Техподдержку 24/7
-
-💳 <b>Продлите подписку сейчас:</b>
-Нажмите «👑 Купить VIP» в главном меню.
-
-Спасибо, что вы с нами! ❤️"""
+💳 Продлите подписку сейчас через меню «👑 Купить VIP»"""
                     )
-                    logging.info(f"✅ Отправлено уведомление о VIP для {user_id}")
                 except Exception as e:
                     logging.error(f"Ошибка отправки уведомления {user_id}: {e}")
         except Exception as e:
             logging.error(f"Ошибка проверки VIP: {e}")
-        
-        await asyncio.sleep(3600)  # Проверяем раз в час
+        await asyncio.sleep(3600)
 
-@dp.message()
-async def catch_all(message: Message):
-    """Ловит ВСЕ сообщения для отладки"""
-    await message.answer(f"📩 Получено сообщение: {message.text if message.text else 'медиа'}")
-    print(f"📩 Получено: {message}")
 # ==================================================
 # ЗАПУСК
 # ==================================================
+
 async def main():
     logging.basicConfig(level=logging.INFO)
     init_db()
     
     print("=" * 60)
-    print("🚀 БОТ ДЛЯ ОБМЕНА ВИДЕО ЗАПУЩЕН!")
-    print("📌 Хранит file_id (не сами файлы)")
-    print("📌 Проверяет дубликаты через хэш + file_unique_id")
-    print("📌 VIP подписка: 299 ₽/месяц")
-    print("📌 Пробный период: 3 дня за 39 ₽")
-    print("📌 Бесплатный лимит: 30 видео в день")
-    print("📌 Категории: 11 штук")
-    print("📌 Автоочистка: рейтинг < -10")
+    print("🚀 БОТ ЗАПУЩЕН!")
     print("=" * 60)
     
-    # Запускаем фоновую проверку VIP
     asyncio.create_task(check_vip_expiring())
     
     await bot.delete_webhook(drop_pending_updates=True)
