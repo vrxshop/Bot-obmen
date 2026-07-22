@@ -1196,6 +1196,28 @@ async def admin_check_complaints(callback: CallbackQuery):
         return
     await callback.answer("⏳ В разработке...", show_alert=True)
 
+@dp.message(Command("export_db"))
+async def export_db(message: Message):
+    """Отправляет админу файл базы данных"""
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ Только для админа!")
+        return
+    
+    # Проверяем, существует ли файл
+    if not os.path.exists(DB_PATH):
+        await message.answer("❌ Файл базы данных не найден!")
+        return
+    
+    # Отправляем файл
+    try:
+        with open(DB_PATH, "rb") as f:
+            await message.answer_document(
+                document=f,
+                caption="📁 База данных бота (bot.db)"
+            )
+        await message.answer("✅ База данных отправлена!")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {e}")
 # ==================================================
 # 4. ВСЁ ОСТАЛЬНОЕ (В САМОМ КОНЦЕ!)
 # ==================================================
