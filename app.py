@@ -58,12 +58,6 @@ CATEGORIES = {
 # ==================================================
 flask_app = Flask(__name__)
 
-@dp.message()
-async def catch_all(message: Message):
-    """Ловит ВСЕ сообщения для отладки"""
-    await message.answer(f"📩 Получено сообщение: {message.text if message.text else 'медиа'}")
-    print(f"📩 Получено: {message}")
-
 @flask_app.route('/')
 def home():
     return "🤖 Бот работает!"
@@ -634,27 +628,20 @@ async def create_rollypay_payment(amount: int, user_id: int, description: str, d
         "success_url": "https://t.me/blogprivatbot",
         "fail_url": "https://t.me/blogprivatbot",
         "merchant_fee": "true",
-        "test": "true"  # ← ТЕСТОВЫЙ РЕЖИМ!
+        "test": "true"
     }
     
     async with aiohttp.ClientSession() as client:
         async with client.post(url, headers=headers, json=payload) as response:
+            # Логируем ошибку, если есть
+            error_text = await response.text()
+            logging.error(f"RollyPay ответ: {response.status} - {error_text}")
+            
             if response.status == 200:
                 data = await response.json()
                 return data.get("pay_url")
             else:
-                logging.error(f"Ошибка RollyPay: {response.status}")
                 return None
-    
-    async with aiohttp.ClientSession() as client:
-        async with client.post(url, headers=headers, json=payload) as response:
-            error_text = await response.text()
-            logging.error(f"RollyPay ошибка: {response.status} - {error_text}")
-            if response.status == 200:
-                data = await response.json()
-                return data.get("pay_url")
-            return None
-
 # ==================================================
 # КЛАВИАТУРЫ
 # ==================================================
@@ -1615,6 +1602,11 @@ async def check_vip_expiring():
         
         await asyncio.sleep(3600)  # Проверяем раз в час
 
+@dp.message()
+async def catch_all(message: Message):
+    """Ловит ВСЕ сообщения для отладки"""
+    await message.answer(f"📩 Получено сообщение: {message.text if message.text else 'медиа'}")
+    print(f"📩 Получено: {message}")
 # ==================================================
 # ЗАПУСК
 # ==================================================
