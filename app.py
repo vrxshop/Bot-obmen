@@ -627,8 +627,18 @@ async def create_rollypay_payment(amount: int, user_id: int, description: str, d
         "callback_url": ROLLYPAY_CALLBACK_URL,
         "success_url": "https://t.me/blogprivatbot",
         "fail_url": "https://t.me/blogprivatbot",
-        "merchant_fee": "true"
+        "merchant_fee": "true",
+        "test": "true"  # ← ТЕСТОВЫЙ РЕЖИМ!
     }
+    
+    async with aiohttp.ClientSession() as client:
+        async with client.post(url, headers=headers, json=payload) as response:
+            if response.status == 200:
+                data = await response.json()
+                return data.get("pay_url")
+            else:
+                logging.error(f"Ошибка RollyPay: {response.status}")
+                return None
     
     async with aiohttp.ClientSession() as client:
         async with client.post(url, headers=headers, json=payload) as response:
