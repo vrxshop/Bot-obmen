@@ -642,6 +642,8 @@ async def create_rollypay_payment(amount: int, user_id: int, description: str, d
     
     async with aiohttp.ClientSession() as client:
         async with client.post(url, headers=headers, json=payload) as response:
+            error_text = await response.text()
+            logging.error(f"RollyPay ошибка: {response.status} - {error_text}")
             if response.status == 200:
                 data = await response.json()
                 return data.get("pay_url")
