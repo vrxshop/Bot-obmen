@@ -36,7 +36,7 @@ MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2 ГБ
 
 # RollyPay
 ROLLYPAY_API_KEY = "z39_r_COJdiB7PWeddOYvzT2rx4cjIbS1m4JJcgBTi0"
-ROLLYPAY_CALLBACK_URL = "https://твой-сервер.onrender.com/webhook"
+ROLLYPAY_CALLBACK_URL = "https://bot-obmen-kwpr.onrender.com/webhook"
 
 # Категории
 CATEGORIES = {
