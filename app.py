@@ -1234,6 +1234,13 @@ async def check_vip_expiring():
             logging.error(f"Ошибка проверки VIP: {e}")
         await asyncio.sleep(3600)
 
+# Временно добавь в код или выполни через Shell на Render
+conn = sqlite3.connect("bot.db")
+c = conn.cursor()
+c.execute("DELETE FROM videos")  # удаляем все старые видео
+conn.commit()
+conn.close()
+
 # ==================================================
 # ЗАПУСК
 # ==================================================
